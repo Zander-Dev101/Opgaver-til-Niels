@@ -1,4 +1,4 @@
-namespace Øvelse_1_og_2_opgave_ting_til_Niels;
+namespace Programmerings_projekt_del_2_af_3;
 
 public static class TestdataFabrik
 {

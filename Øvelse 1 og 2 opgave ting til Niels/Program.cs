@@ -1,255 +1,125 @@
-using System.Globalization;
+﻿using Øvelse_1_og_2_opgave_ting_til_Niels;
 
-namespace Øvelse_1_og_2_opgave_ting_til_Niels;
+Console.Write("Indtast ord du vil søge efter: ");
+string searchWord = Console.ReadLine() ?? string.Empty;
 
-class Program
+Console.Write("Indtast tekst: ");
+string text = Console.ReadLine() ?? string.Empty;
+
+Result<int> wordCountResult = WordCount(searchWord, text);
+
+if (!wordCountResult.IsSuccess)
 {
-    static void Main()
+    Console.WriteLine(wordCountResult.ErrorMessage);
+}
+else
+{
+    int count = wordCountResult.Value;
+    bool? analysisResult = AnalyzeCount(count);
+
+    Console.WriteLine(GetMessage(searchWord, count, analysisResult));
+
+    if (analysisResult == true)
     {
-        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        Console.Write("Vælg hvor filen skal gemmes (1 = user folder, 2 = projekt): ");
+        string saveChoice = Console.ReadLine() ?? string.Empty;
 
-        List<MedarbejderDto> medarbejdere = TestdataFabrik.OpretMedarbejdere();
-        int[,] lønData = OpretLønData();
-        bool kører = true;
+        FileSaver saver = saveChoice == "1"
+            ? new UserFolderFileSaver()
+            : new ProjectFolderFileSaver();
 
-        while (kører)
-        {
-            VisMenu();
-            Console.Write("Vælg et menupunkt: ");
-            string? valg = Console.ReadLine()?.Trim();
+        string savedPath = saver.Save("output.txt", text);
+        Console.WriteLine($"Fil gemt her: {savedPath}");
+    }
+}
 
-            Console.Clear();
+Console.WriteLine();
+Console.Write("Skriv en værdi til dynamic-metoden: ");
+string dynamicInput = Console.ReadLine() ?? string.Empty;
+dynamic dynamicValue = ParseDynamicInput(dynamicInput);
+dynamic dynamicResult = ProcessDynamicValue(dynamicValue);
+Console.WriteLine($"Dynamic resultat: {dynamicResult}");
 
-            switch (valg)
-            {
-                case "1":
-                    UdskrivAlleMedarbejdere(medarbejdere);
-                    break;
-                case "2":
-                    UdskrivMedarbejdereEfterKøn(medarbejdere, Køn.Kvinde, "Kvindelige medarbejdere");
-                    break;
-                case "3":
-                    UdskrivMedarbejdereEfterKøn(medarbejdere, Køn.Mand, "Mandlige medarbejdere");
-                    break;
-                case "4":
-                    UdskrivMedarbejdereTætPåPension(medarbejdere, lønData);
-                    break;
-                case "5":
-                    RegistrerNyMedarbejder(medarbejdere);
-                    break;
-                case "6":
-                    kører = false;
-                    Console.WriteLine("Programmet afsluttes.");
-                    break;
-                default:
-                    Console.WriteLine("Ugyldigt valg. Prøv igen.");
-                    break;
-            }
+Console.WriteLine("Dynamic kan være farligt, fordi fejl ofte først opdages, når programmet kører.");
 
-            if (kører)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Tryk Enter for at vende tilbage til menuen.");
-                Console.ReadLine();
-                Console.Clear();
-            }
-        }
+static Result<int> WordCount(string word, string text)
+{
+    if (string.IsNullOrWhiteSpace(word))
+    {
+        return Result<int>.Failure("Fejl: ordet du vil søge efter må ikke være tomt.");
     }
 
-    static int[,] OpretLønData()
+    if (string.IsNullOrWhiteSpace(text))
     {
-        return new int[,]
-        {
-            { 42000, 46000, 92000, 52500 },
-            { 35000, 38000, 76000, 43750 },
-            { 33000, 36000, 72000, 41250 }
-        };
+        return Result<int>.Failure("Fejl: teksten du vil søge i må ikke være tom.");
     }
 
-    static void VisMenu()
+    word = word.ToLowerInvariant();
+    text = text.ToLowerInvariant();
+
+    int count = 0;
+    int index = 0;
+
+    while ((index = text.IndexOf(word, index, StringComparison.Ordinal)) != -1)
     {
-        Console.WriteLine("Programmerings projekt del 2 af 3");
-        Console.WriteLine("---------------------------------");
-        Console.WriteLine("1. Vis alle medarbejdere");
-        Console.WriteLine("2. Vis kvindelige medarbejdere");
-        Console.WriteLine("3. Vis mandlige medarbejdere");
-        Console.WriteLine("4. Vis medarbejdere med 5 eller mindre år til pension");
-        Console.WriteLine("5. Registrer ny medarbejder");
-        Console.WriteLine("6. Afslut");
-        Console.WriteLine();
+        count++;
+        index += word.Length;
     }
 
-    static void UdskrivAlleMedarbejdere(List<MedarbejderDto> medarbejdere)
+    return Result<int>.Success(count);
+}
+
+static bool? AnalyzeCount(int count)
+{
+    if (count == 0)
     {
-        Console.WriteLine("Alle medarbejdere");
-        Console.WriteLine("-----------------");
-        UdskrivMedarbejderListe(medarbejdere);
+        return null;
     }
 
-    static void UdskrivMedarbejdereEfterKøn(List<MedarbejderDto> medarbejdere, Køn køn, string overskrift)
+    if (count < 10)
     {
-        Console.WriteLine(overskrift);
-        Console.WriteLine(new string('-', overskrift.Length));
-
-        List<MedarbejderDto> filtreredeMedarbejdere = medarbejdere
-            .Where(medarbejder => medarbejder.Køn == køn)
-            .OrderBy(medarbejder => medarbejder.Efternavn, StringComparer.Create(new CultureInfo("da-DK"), true))
-            .ThenBy(medarbejder => medarbejder.Fornavn, StringComparer.Create(new CultureInfo("da-DK"), true))
-            .ToList();
-
-        UdskrivMedarbejderListe(filtreredeMedarbejdere);
+        return false;
     }
 
-    static void UdskrivMedarbejdereTætPåPension(List<MedarbejderDto> medarbejdere, int[,] lønData)
+    return true;
+}
+
+static string GetMessage(string word, int count, bool? result)
+{
+    if (result == null)
     {
-        Console.WriteLine("Medarbejdere med 5 eller mindre år til pension");
-        Console.WriteLine("----------------------------------------------");
-
-        DateOnly dagsDato = DateOnly.FromDateTime(DateTime.Today);
-
-        List<MedarbejderDto> filtreredeMedarbejdere = medarbejdere
-            .Where(medarbejder => PensionsHjælper.BeregnÅrTilPension(medarbejder.Fødselsdato, dagsDato) <= 5)
-            .OrderBy(medarbejder => medarbejder.Efternavn, StringComparer.Create(new CultureInfo("da-DK"), true))
-            .ThenBy(medarbejder => medarbejder.Fornavn, StringComparer.Create(new CultureInfo("da-DK"), true))
-            .ToList();
-
-        if (filtreredeMedarbejdere.Count == 0)
-        {
-            Console.WriteLine("Ingen medarbejdere fundet.");
-            return;
-        }
-
-        foreach (MedarbejderDto medarbejder in filtreredeMedarbejdere)
-        {
-            int alder = PensionsHjælper.BeregnAlder(medarbejder.Fødselsdato, dagsDato);
-            int årTilPension = PensionsHjælper.BeregnÅrTilPension(medarbejder.Fødselsdato, dagsDato);
-            int bonus = HentPensionsBonus(medarbejder, lønData);
-
-            Console.WriteLine(
-                $"{medarbejder.Fornavn} {medarbejder.Efternavn} | Alder: {alder} | År til pension: {årTilPension} | " +
-                $"Køn: {TekstFormattering.FormatérEnumNavn(medarbejder.Køn)} | " +
-                $"Afdeling: {TekstFormattering.FormatérEnumNavn(medarbejder.Afdeling)} | " +
-                $"Pension fratrædelse bonus: {bonus:N0} kr.");
-        }
+        return "Det søgte ord findes ikke i den angivne tekst.";
     }
 
-    static int HentPensionsBonus(MedarbejderDto medarbejder, int[,] lønData)
+    return $"Ordet '{word}' forekommer {count} gange.";
+}
+
+static dynamic ParseDynamicInput(string input)
+{
+    if (int.TryParse(input, out int number))
     {
-        int række = (int)medarbejder.Afdeling;
-        int kolonne = medarbejder.Køn == Køn.Mand ? 2 : 3;
-        return lønData[række, kolonne];
+        return number;
     }
 
-    static void RegistrerNyMedarbejder(List<MedarbejderDto> medarbejdere)
+    if (bool.TryParse(input, out bool boolean))
     {
-        Console.WriteLine("Registrer ny medarbejder");
-        Console.WriteLine("------------------------");
-
-        Console.Write("Fornavn: ");
-        string fornavn = LæsPåkrævetTekst();
-
-        Console.Write("Efternavn: ");
-        string efternavn = LæsPåkrævetTekst();
-
-        Console.Write("Fødselsdato (dd-MM-yyyy eller dd MM yyyy): ");
-        DateOnly fødselsdato = LæsFødselsdato();
-
-        Køn køn = LæsEnumValg<Køn>("Vælg køn");
-        Afdeling afdeling = LæsEnumValg<Afdeling>("Vælg afdeling");
-
-        MedarbejderDto nyMedarbejder = new()
-        {
-            Fornavn = fornavn,
-            Efternavn = efternavn,
-            Fødselsdato = fødselsdato,
-            Køn = køn,
-            Afdeling = afdeling
-        };
-
-        medarbejdere.Add(nyMedarbejder);
-        Console.WriteLine();
-        Console.WriteLine("Medarbejderen er registreret.");
+        return boolean;
     }
 
-    static TEnum LæsEnumValg<TEnum>(string overskrift) where TEnum : struct, Enum
+    return input;
+}
+
+static dynamic ProcessDynamicValue(dynamic value)
+{
+    if (value is int number)
     {
-        TEnum[] værdier = Enum.GetValues<TEnum>();
-
-        while (true)
-        {
-            Console.WriteLine();
-            Console.WriteLine(overskrift + ":");
-
-            for (int indeks = 0; indeks < værdier.Length; indeks++)
-            {
-                Console.WriteLine($"{indeks + 1}. {TekstFormattering.FormatérEnumNavn(værdier[indeks])}");
-            }
-
-            Console.Write("Indtast dit valg: ");
-            string? input = Console.ReadLine()?.Trim();
-
-            if (int.TryParse(input, out int valgNummer) && valgNummer >= 1 && valgNummer <= værdier.Length)
-            {
-                return værdier[valgNummer - 1];
-            }
-
-            Console.WriteLine("Ugyldigt valg. Prøv igen.");
-        }
+        return 100 + number;
     }
 
-    static string LæsPåkrævetTekst()
+    if (value is string textValue)
     {
-        while (true)
-        {
-            string? input = Console.ReadLine()?.Trim();
-            if (!string.IsNullOrWhiteSpace(input))
-            {
-                return input;
-            }
-
-            Console.Write("Feltet må ikke være tomt. Prøv igen: ");
-        }
+        return $"Følgende tekst modtaget: {textValue}";
     }
 
-    static DateOnly LæsFødselsdato()
-    {
-        string[] formater = ["dd-MM-yyyy", "d-M-yyyy", "dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd", "dd MM yyyy", "d M yyyy"];
-
-        while (true)
-        {
-            string? input = Console.ReadLine()?.Trim();
-
-            if (DateOnly.TryParseExact(input, formater, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly dato))
-            {
-                return dato;
-            }
-
-            Console.Write("Ugyldig dato. Prøv igen (f.eks. 27-05-2007 eller 27 05 2007): ");
-        }
-    }
-
-    static void UdskrivMedarbejderListe(List<MedarbejderDto> medarbejdere)
-    {
-        if (medarbejdere.Count == 0)
-        {
-            Console.WriteLine("Ingen medarbejdere fundet.");
-            return;
-        }
-
-        DateOnly dagsDato = DateOnly.FromDateTime(DateTime.Today);
-
-        foreach (MedarbejderDto medarbejder in medarbejdere
-                     .OrderBy(medarbejder => medarbejder.Efternavn, StringComparer.Create(new CultureInfo("da-DK"), true))
-                     .ThenBy(medarbejder => medarbejder.Fornavn, StringComparer.Create(new CultureInfo("da-DK"), true)))
-        {
-            int alder = PensionsHjælper.BeregnAlder(medarbejder.Fødselsdato, dagsDato);
-            int årTilPension = PensionsHjælper.BeregnÅrTilPension(medarbejder.Fødselsdato, dagsDato);
-
-            Console.WriteLine(
-                $"{medarbejder.Fornavn} {medarbejder.Efternavn} | Født: {medarbejder.Fødselsdato:dd-MM-yyyy} | " +
-                $"Alder: {alder} | År til pension: {årTilPension} | " +
-                $"Køn: {TekstFormattering.FormatérEnumNavn(medarbejder.Køn)} | " +
-                $"Afdeling: {TekstFormattering.FormatérEnumNavn(medarbejder.Afdeling)}");
-        }
-    }
+    return false;
 }
